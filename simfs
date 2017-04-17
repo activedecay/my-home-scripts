@@ -1,0 +1,218 @@
+#!/usr/bin/python
+# Mount with:
+#  ./simfs /mnt
+#
+# Unmount with:
+#  fusermount -u /mnt
+#
+# For debugging:
+# ./simfs -f -d /mnt
+#
+from __future__ import unicode_literals
+import errno
+import fuse
+import json
+import logging
+import os
+import stat
+import time
+import traceback
+import httplib
+import Queue
+from contextlib import contextmanager
+
+fuse.fuse_python_api = (0, 2)
+
+log = logging.getLogger()
+
+timestamp = int(time.time())
+sdk_basepaths = ['/mgmt', '/vsl', '/vsl_os', '/vsl_saft', '/iot', '/vsl_dc']
+
+class SimulatorError(Exception):
+    def __init__(self, url, status):
+        super(SimulatorError, self).__init__("%s: %s" % (url, status))
+        self.url = url
+        self.status = status
+
+class DirStat(fuse.Stat):
+    def __init__(self):
+        self.st_mode = stat.S_IFDIR | 0755
+        self.st_ino = 0
+        self.st_dev = 0
+        self.st_nlink = 2
+        self.st_uid = 0
+        self.st_gid = 0
+        self.st_size = 4096
+        self.st_atime = timestamp
+        self.st_mtime = timestamp
+        self.st_ctime = timestamp
+
+
+class FileStat(fuse.Stat):
+    def __init__(self, size):
+        self.st_mode = stat.S_IFREG | 0644
+        self.st_ino = 0
+        self.st_dev = 0
+        self.st_nlink = 1
+        self.st_uid = 0
+        self.st_gid = 0
+        self.st_size = size
+        self.st_atime = timestamp
+        self.st_mtime = timestamp
+        self.st_ctime = timestamp
+
+
+def get_contents(conn, path):
+    if path == '/':
+        return [p[1:] for p in sdk_basepaths if check_exists(conn, p)]
+    try:
+        conn.request('GET', path.encode())
+    except:
+        traceback.print_exc()
+        raise
+    response = conn.getresponse()
+    body = response.read()
+    if response.status == 200:
+        contents = json.loads(body)
+        try:
+            if contents['retval'] == -3:
+                return None
+        except (TypeError, AttributeError):
+            pass
+        return contents
+    if response.status == 404:
+        return None
+    else:
+        raise SimulatorError(path, response.status)
+
+def exists(path, contents):
+    if path in ['.', '..', '/']:
+        return True
+    return contents is not None
+
+def check_exists(conn, path):
+    if path in ['.', '..', '/']:
+        return True
+    return get_contents(conn, path) is not None
+
+def is_dir(contents):
+    return isinstance(contents, list)
+
+def displayjson(contents):
+    output = json.dumps(contents, indent=4, separators=(',', ': '))
+    output += "\n"
+    return output.encode('utf-8')
+
+
+class SimFuse(fuse.Fuse):
+    def __init__(self, *args, **kw):
+        fuse.Fuse.__init__(self, *args, **kw)
+        self.connections = Queue.LifoQueue(4)
+        while not self.connections.full():
+            # TODO figure out how to specify the host and port using a mount option
+            connection = httplib.HTTPConnection("localhost", 9052, timeout = 15)
+            connection.set_debuglevel(0)
+            self.connections.put(connection)
+
+    @contextmanager
+    def connection(self):
+        connection = self.connections.get()
+        yield connection
+        self.connections.put(connection)
+
+    def getattr(self, path):
+        log.debug("getattr(path=%s)" % (path))
+        upath = path.decode()
+        with self.connection() as connection:
+            try:
+                contents = get_contents(connection, upath)
+                if contents is None:
+                    return -errno.ENOENT
+                return DirStat() if is_dir(contents) else FileStat(len(displayjson(contents)))
+            except:
+                log.error(traceback.format_exc())
+                return -errno.ENOENT
+
+    def readdir(self, path, offset):
+        log.debug("readdir(path=%s, offset=%s)" % (path, offset))
+        upath = path.decode()
+        with self.connection() as connection:
+            try:
+                entries = [u'.', u'..']
+                entries.extend(get_contents(connection, upath))
+                for e in entries:
+                    yield fuse.Direntry(e.encode())
+            except:
+                log.error(traceback.format_exc())
+                yield -errno.ENOENT
+
+    def open(self, path, flags):
+        log.debug("open(path=%s, flags=%s)" % (path, flags))
+        access_flags = os.O_RDONLY | os.O_WRONLY | os.O_RDWR
+        # Only allow read only access for now
+        if flags & access_flags != os.O_RDONLY:
+            return -errno.EACCES
+        else:
+            upath = path.decode()
+            # Make sure file exists
+            with self.connection() as connection:
+                try:
+                    contents = get_contents(connection, upath)
+                    if contents is None:
+                        return -errno.EACCES
+                except:
+                    log.error(traceback.format_exc())
+                    return ''
+            return 0
+
+    def read(self, path, size, offset):
+        log.debug("read(path=%s, size=%s, offset=%s)" % (path, size, offset))
+        upath = path.decode()
+        with self.connection() as connection:
+            try:
+                contents = get_contents(connection, upath)
+                if contents is None:
+                    return -errno.EBADF
+                bytes = displayjson(contents)
+                return bytes[offset:offset+size]
+            except:
+                log.error(traceback.format_exc())
+                return -errno.EBADF
+
+    def mknod(self, path, mode, dev):
+        log.debug("mknod(path=%s, mode=%s, dev=%s)" % (path, mode, dev))
+        return -errno.EACCES
+
+    def unlink(self, path):
+        log.debug("unlink(path=%s)" % (path))
+        return -errno.EACCES
+
+    def write(self, path, buf, offset):
+        log.debug("write(path=%s, buf=%s, offset=%s)" % (path, buf, offset))
+        #return len(buf)
+        return 0
+
+    def release(self, path, flags):
+        log.debug("release(path=%s, flags=%s)" % (path, flags))
+        return 0
+
+    def mkdir(self, path, mode):
+        log.debug("mkdir(path=%s, mode=%s)" % (path, mode))
+        return -errno.EACCES
+
+    def rmdir(self, path):
+        log.debug("rmdir(path=%s)" % (path))
+        return -errno.EACCES
+
+    def rename(self, pathfrom, pathto):
+        log.debug("write(pathfrom=%s, pathto=%s)" % (pathfrom, pathto))
+        return -errno.EACCES
+
+if __name__ == '__main__':
+    logging.basicConfig()
+    log.setLevel(logging.DEBUG)
+    server = SimFuse(version="%prog " + fuse.__version__,
+                     usage=fuse.Fuse.fusage,
+                     dash_s_do='setsingle')
+    server.parse(errex=1)
+    server.main()

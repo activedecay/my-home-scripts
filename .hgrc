@@ -1,0 +1,49 @@
+[ui]
+username = Justin Faust <justin.faust@sandisk.com>
+merge = kdiff3
+
+[paths]
+cinder = ssh://hg//srv/hg/mgmt/cinder_ion
+firehose = ssh://hg//srv/hg/firehose
+management = ssh://hg//srv/hg/management
+tools = ssh://hg//srv/hg/tools
+mgmt_service = ssh://hg//srv/hg/mgmt/mgmt_service
+mgmt_clients = ssh://hg//srv/hg/mgmt/mgmt_clients
+flashcenter = ssh://hg//srv/hg/flashcenter
+ioncli = ssh://hg//srv/hg/mgmt/ioncli
+gargamel = ssh://hg//srv/hg/QA/gargamel
+
+[extensions]
+extdiff =
+transplant =
+progress =
+graphlog =
+record =
+rebase =
+purge =
+color =
+mq =
+hgext.fusion = /hg/tools/hgext/fusion.py
+reviewboard = /hg/tools/hgext/reviewboard
+prompt = /hg/hg-prompt/prompt.py
+
+[reviewboard]
+server = https://reviews.sandisk.com
+user = jfaust
+
+[alias]
+ms = fsubmit
+
+[diff]
+git = False
+
+[tortoisehg]
+vdiff = bcompare
+ui.language = en
+editor = gedit
+
+[subpaths]
+http://hg.int.fusionio.com/~(.*) = ssh://hg.int.fusionio.com/~\1
+http://hg/~(.*) = ssh://hg.int.fusionio.com/~\1
+http://hg.int.fusionio.com/(.*) = ssh://hg.int.fusionio.com//srv/hg/\1/
+http://hg/(.*) = ssh://hg.int.fusionio.com//srv/hg/\1/

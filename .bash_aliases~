@@ -1,0 +1,820 @@
+#! /bin/bash
+function packets { # watches packets from localhost loopback interface to port 9051
+  sudo tcpflow -i lo port 9051
+}
+function touchpad {
+  if [ "$1" == "on" ]; then
+   synclient TouchpadOff=0
+  elif [ "$1" == "off" ]; then
+   synclient TouchpadOff=1
+  else
+   echo "usage: touchpad [on|off]"
+  fi
+}
+function vga {
+  if [ "$1" == "right" -o "$1" == "left" ]; then
+    xrandr --output VGA1 --off
+    xrandr --output VGA1 --auto --$1-of LVDS1
+  elif [ "$1" == "above" -o "$1" == "below" ]; then
+    xrandr --output VGA1 --off
+    xrandr --output VGA1 --auto --$1 LVDS1
+  elif [ "$1" == "off" ]; then
+    xrandr --output VGA1 --off
+  else
+    echo "usage: vga [right|left|above|below]"
+  fi
+}
+
+function heartbleed {
+  THEIRS=$(date --date="$(check_ssl $1|grep Before|cut -d'=' -f2)" "+%s")
+  FIXED=$(date --date="2014-04-07 19:45:14.000000000 +0000" "+%s")
+  NOW=$(date "+%s")
+  if [ $(($NOW - $FIXED)) -gt $(($NOW - $THEIRS)) ]; then
+    echo fixed
+  else
+    echo broke
+  fi
+  echo $( displaytime $(($NOW - $FIXED)) ) " <-- time since openssl was fixed"
+  echo $( displaytime $(($NOW - $THEIRS)) ) " <<< $1's cert should be younger"
+}
+
+function check_ssl {
+  echo | openssl s_client -connect $1:443 2>/dev/null | openssl x509 -noout -dates
+}
+
+function displaytime {
+  local T=$1
+  local D=$((T/60/60/24))
+  local H=$((T/60/60%24))
+  local M=$((T/60%60))
+  local S=$((T%60))
+  [[ $D > 0 ]] && printf '%dd ' $D
+  [[ $H > 0 ]] && printf '%dh ' $H
+  [[ $M > 0 ]] && printf '%dm ' $M
+  [[ $D > 0 || $H > 0 || $M > 0 ]] && printf ''
+  printf '%ds\n' $S
+}
+
+rbp() # move a reviewboard patch here, named <name>
+{
+  mv ~/in/rb*patch ".hg/patches/$1"
+  hg qimport -e "$1"
+}
+bat()
+{
+  upower -i $(upower --enumerate|grep battery)
+}
+getjira() # gets the "key: value" text using <jira_id>
+{
+  curl -s -ujfaust https://jira.int.fusionio.com/browse/$1 | java -jar /usr/share/java/tagsoup.jar > /tmp/index.html
+  sed -i 's/xmlns="[^"]*"//' /tmp/index.html
+  key=$(</tmp/index.html xmlstarlet sel -t -c '//a[@id="key-val"]/text()')
+  val=$(</tmp/index.html xmlstarlet sel -t -c '//h1[@id="summary-val"]/text()')
+  echo $key: $val;
+}
+alias unwake='sudo umount /dev/fioa && sudo modprobe -r iomemory_vsl && sudo pm-suspend'
+alias wake='sudo modprobe iomemory-vsl && sudo mount /dev/fioa /mnt/iodrive '
+
+getlast() # to print out the last command line invoking <mycommand>
+{
+  fc -nl "$1" "$1"
+}
+alias lnk="gnome-desktop-item-edit ~/Desktop/ --create-new"
+getpass()
+{
+  curl -s -X POST -d "SSN=$1" http://10.50.39.115/cgi-bin/getpass.pl|java -jar /usr/share/java/tagsoup.jar|sed 's/xmlns="[^"]*"//'|xmlstarlet sel -t -c "//font[2]/text()"|grep -oP "(?<=password is ').*\b"|tr -d "\n"
+}
+ctime()
+{
+  date -d @$1
+}
+# invert screen colors
+alias invert='xcalib -i -a'
+#download ion to xsilentbob
+tarxf()
+{
+  for file in `find . -maxdepth 1 -name \*tar\* -type f -o -name \*bz2\* -type f`
+  do
+    if [ -f "$file" ]; then
+      mkdir "$file-dir";
+      tar xf "$file" -C "$file-dir";
+    fi
+  done
+}
+getion()
+{
+  sshpass -pcentcio ssh root@xsilent-bob "sh" < /scripts/getion.sh
+}
+
+# For Flash Center S/N or MAC 'VMWARE-42', the root password is 'mmaCWxVL'.
+# For Flash Center S/N or MAC 'USE3256VRJ', the root password is 'ibb2C9PV'.
+# For Flash Center S/N or MAC 'USE3256VRL', the root password is 'Sgxx77IN'.
+alias days='echo $(($(date -d 1-May +%j) - $(date +%j))) days until Derrick moves out!'
+#ssh
+sshvm()
+{
+  echo sshpass -pasdfasdf ssh root@10.50.33.$1
+  sshpass -pasdfasdf ssh root@10.50.33.$1
+}
+alias sshr='ssh-keygen -f "/home/jfaust/.ssh/known_hosts" -R 10.50.141.152;ssh-keygen -f "/home/jfaust/.ssh/known_hosts" -R 10.50.141.154;ssh-keygen -f "/home/jfaust/.ssh/known_hosts" -R 10.50.141.10'
+alias sshn1="echo 87Z/ZceD;echo 87Z/ZceD|xsel; ssh fusionservice@10.50.141.152"
+alias sshn2="echo bNmDwUaF;echo bNmDwUaF|xsel; ssh fusionservice@10.50.141.154"
+alias sshnm="ssh fusionservice@10.50.141.10"
+# make a partition that takes up the entire disk (stack overflow)
+fill_the_disk()
+{
+  parted -s -a optimal $1 mklabel gpt -- mkpart primary ext4 1 -1
+}
+kt()
+{
+  kate $* > /dev/null 2>&1 &
+}
+alias ion='sqlite3 -line /var/lib/fio/data/cfg.dat "update config set value=2 where config_key=9"'
+keyup()
+{
+ for i in `seq 1 $1`; do
+  dlk $2 > /var/lib/fio-sim$i/agent_keys/$2.int.fusionio.com.key
+ done
+}
+alias wf="./fio-status --version | sed -e s'|.*@\(.*\)|curl http://hg.int.fusionio.com/firehose/raw-file/\1/src/fpga-image/INFO|'" ## what firmware dude? John Calcote!
+destroy_the_world()
+{ # completely re-writes your leb map. pretty haneous.
+  sudo load-driver -anN
+  sudo ./fio-write-lebmap -c /dev/fct0
+  sudo ./fio-format /dev/fct0
+  sudo ./load-driver
+}
+alias dvdgrp='sudo chmod 660 /dev/sr0;sudo chgrp cdrom /dev/sr0'
+alias chat='irssi -c irc.freenode.net -w Nonth1ng -n activedecay'
+alias nautilus='nautilus --no-desktop --browser'
+tres()
+{
+  curl -s http://www.spanishdict.com/translate/$1 | grep -E "class=\"quick_def\"|class=\"word\"" | sed 's/<[^>]*>/ /g;s/^ *//g;s/ *$//;s/ \{1,\}/ /g'
+}
+alias junk='mv jsrc/IoManager/target/generated-sources/ .; rm -rf jsrc/IoManager/target/* ; rm -rf jsrc/IoManager/target/.generated ; mv generated-sources jsrc/IoManager/target/'
+alias doit='bm -bpx; junk'
+alias doin='bm -bpnx; junk'
+alias die='bm -xbn; junk'
+alias dont='pushd jsrc/IoManager;mvn package -Dmaven.test.skip=true -Pdev -Dskin=fio;popd;junk' # to debug maven builds
+dsk() # overwrite your current skin files with the new (skin)
+{
+  if [ $# -eq 0 ]; then echo "not enough arguments. 1 required (skin)"; return 1; fi
+  if [ -d jsrc ]; then
+  skin=$1; shift
+  pushd jsrc/IoManager
+    rm -r war
+    mvn resources:resources -Dskin=$skin;
+    cp -R war/WEB-INF/classes/* ../../output/resources/html
+  popd
+  else
+    echo "you're not likely at the management root"; return 1;
+  fi
+}
+
+
+# alias helpers
+alias realias='. ~/.bash_aliases'
+alias new='nano ~/.bash_aliases;realias'
+alias hs='ls ~/.bash_aliases | xargs grep --color=auto' # help scripts (raw)
+hso() # help scripts (optimized); optimizes out the garbage inside the alias, and just shows the comment.
+{
+  hs $1 | sed 's/=.*#//g'
+}
+
+
+# linux aliases
+ipscan() # scans the (ip_address) passed in for all open hosts that appear to be up. network discovery!
+{
+  nmap -n -sP $1 # example ipscan 10.50.33.0/24
+}
+psa()
+{
+  proc=$1; shift
+  ps -A | grep $proc | sed 's/ ?[0-9]*.*//g;s/ //g' | xargs $*
+}
+alias grip='grep -i'
+function fn { # find in . with <name1> or <name2> or <nameN>... [-c] copies to clipboard
+  local dir='.'
+  local args=""
+  local verbose=0
+  if [ "$1" == "-c" ]; then verbose=1; shift; fi
+
+  #read into array (-a)
+  IFS="$IFS," read -ra names <<< "$*"
+  for name in "${names[@]}"; do
+    if [ "$args" == "" ]; then 
+      args="-name $name"; 
+    else 
+      args="$args -o -name $name"; 
+    fi
+    #echo $args
+  done
+
+  if [ $verbose == 1 ]; then
+    echo -n find $dir $args|xsel -b;
+  else 
+    find $dir $args
+  fi
+}
+fdg() # find in (directory) a (file)  having contents (grep)
+{
+  if [ $# -eq 0 -o $# -eq 1 -o $# -eq 2 ]
+    then
+      echo "Not enough arguments supplied; 3 are required (dir name grep)."
+  else
+    TEMP=`getopt --options f:d:g:v --long file,directory,grep,verbose --name 'bash_aliases.sh' -- "$@"`
+    eval set -- "${TEMP}"
+
+    directory=
+    file=
+    grenades=
+
+    while true ; do
+      case "$1" in
+        -f|--file) file="$2"; shift 2 ;;
+        -d|--directory) directory="$2"; shift 2 ;;
+        -g|--grep) grenades="$2"; shift 2 ;;
+        -v|--verbose) verbose="$1"; shift ;;
+        --) shift ; break ;;
+        *) echo "Unhandled option $1" ; shift ;;
+      esac
+    done
+
+    for arg #these arguments were not parsed by the case "$1" statement.
+    do
+        if [ -z "${directory}" ]; then
+            directory=${arg}
+        elif [ -z "${file}" ]; then
+            file=${arg}
+        else
+            if [ -z "${grenades}" ]; then
+                grenades="${arg}"
+            else
+                grenades="${grenades} ${arg}"
+            fi
+        fi
+    done
+
+    if [ "${verbose}" ]; then
+        echo find "${directory}" -type f -name "${file}" \| xargs -e grep --color=auto -nH \"${grenades}\";
+    fi
+    find "${directory}" -type f -name "${file}" | xargs -e grep --color=auto -nH "${grenades}"
+
+    unset arg directory grenades file TEMP verbose
+  fi
+}
+# == SQL queries ==
+
+dsc() # sqlite3 describe and show the schema for the (mobj_type)
+{
+  if [ $# -eq 0 ]
+    then
+      echo "Not enough arguments supplied; 1 is required (mobj_type)."
+  else
+    echo sudo sqlite3 -line /var/lib/fio/data/m$1.dat \".schema mobj_$1\"
+    sudo sqlite3 -line /var/lib/fio/data/m$1.dat ".schema mobj_$1"
+  fi
+}
+sel() # sqlite3 select the (mobj_type <1, 2, etc.>) showing the (attributes <*, a123, etc.>)
+{
+  if [ $# -eq 0 -o $# -eq 1 ]
+    then
+      echo "Not enough arguments supplied; 2 are required (mobj_type attributes)."
+  else
+   echo sudo sqlite3 -line /var/lib/fio/data/m$1.dat \"SELECT "$2" FROM mobj_$1 $3\"
+   sudo sqlite3 -line /var/lib/fio/data/m$1.dat "SELECT $2 FROM mobj_$1 $3"
+  fi
+}
+upd() # sqlite3 update (mobj_type)'s table with (values) (where) there's a match UPDATE table_name SET column1=value, column2=value2,... WHERE some_column=some_value
+{
+  if [ $# -eq 0 -o $# -eq 1 -o $# -eq 2 ]
+    then
+      echo "Not enough arguments supplied; 3 are required (mobj_type values where)."
+  else
+    echo sudo sqlite3 /var/lib/fio/data/m$1.dat \"UPDATE "mobj_$1" SET "$2" WHERE "$3"\"
+    sudo sqlite3 /var/lib/fio/data/m$1.dat "UPDATE mobj_$1 SET $2 WHERE $3"
+  fi
+}
+ins() # sqlite3 insert into the (mobj_type fld_search)'s table the row with (attributes_list)
+{
+  unset outAttr outVal comma execute stuff total tmp
+  if [ $# -eq 0 -o $# -eq 1 ]
+    then
+      echo "Not enough arguments supplied; 2 are required, 1 optional (mobj_type fld_search [unique_number])."
+  else
+    ky=0
+    if [ "$3" ]; then ky=$3; fi
+    tmp=`wcalc -P0 "$1<<48"`
+    tmp=`expr ${tmp:2} + $ky`
+    echo ${tmp}
+
+    fld $2 | sed 's/.*id="\([^"]*\)".*name="\([^"]*\)".*/a\1,\2/' > /tmp/foo.txt
+    total=0
+    for stuff in `cat /tmp/foo.txt`;
+    do
+        total=`expr $total + 1`;
+    done
+    for stuff in `cat /tmp/foo.txt`;
+    do
+        field=`echo $stuff | sed 's/,.*//'`;
+        name=`echo $stuff | sed 's/.*,//'`;
+        echo $name \($field\) $total;
+        total=`expr $total - 1`;
+
+        read line;
+        outAttr=$outAttr${comma}$field;
+        outVal=$outVal${comma}$line;
+        comma=","
+    done
+    echo sudo sqlite3 -line /var/lib/fio/data/m$1.dat \"insert into mobj_$1 \(key,$outAttr\) values \(${tmp},$outVal\)\;\"
+    echo -n "execute? "; read execute;
+    if [ "$execute" == "y" ];
+      then
+      sudo sqlite3 -line /var/lib/fio/data/m$1.dat "insert into mobj_$1 (key,$outAttr) values (${tmp},$outVal);"
+    fi
+  fi
+}
+del() # sqlite3 delete the row from (mobj_type <1, 2, etc.>)'s table using the (where_clause)
+{
+  if [ $# -eq 0 -o $# -eq 1 ]
+    then
+      echo "Not enough arguments supplied; 2 are required (mobj_type where_clause)."
+  else
+    sqlite3 /var/lib/fio/data/m$1.dat "DELETE FROM mobj_$1 WHERE $2"
+  fi
+}
+# == mount ==
+alias tesp='sudo mount -t cifs //10.50.3.233/users/jfaust/hg /mnt/tespey-test -o username=jfaust,password=w0\(\)dyMcwooderson,domain=FUSIONIO'
+alias egg='sudo mount -t cifs //10.50.33.81/super -o username=super,password=liedicm /mnt/chickenlord' # mount chickenlord. user/pass admin/admin
+alias gil='sudo smbmount //gil/files /mnt/gil -o user=guest -o password=guest'
+# == project file for qtcreator ==
+alias qtincludes="find . -name include -type d | xargs -I dir find dir -name *.h| sed 's/\.\///;s/\(.*\)\/.*/\1/;s/management_libs\/.../management_libs\/current/' | uniq"
+alias qtfiles='find . -name *.cpp -o -name *.h | sed "s/.\///;s/management_libs\/.../management_libs\/current/"'
+alias qtnew='qtincludes > mgmt-qtproj.includes; qtfiles > mgmt-qtproj.files'
+
+# MANAGEMENT HELPERS ---
+alias doc='firefox ./misc/iomgr_payload_model/doc/endpoints.html&'
+alias fld='ls ./misc/model/fields.xml | xargs egrep --color=auto' # look for a field.properties id or attribute
+flids()
+{
+  for x in `echo "$*"|sed 's/a//g;s/ //g;s/\n/ /g;'` ; do fld "\"$x\" "; done
+}
+alias mobj='find . -name Enumerations.java | xargs grep "public enum ManagedObjectType" -A 77 | grep -i'
+# == build test ==
+alias mvn-dbg='mvn -Dgwt.logLevel=ALL -Dmaven.test.skip=true -Pdev -Dskin=fio' # to debug maven builds
+# == generate ==
+alias mgen='./misc/model/run.py -n'
+alias mgenq='./misc/model/run.py -B'
+alias mgenc='./misc/model/run.py'
+alias mgp='java -jar "/hg/management/jsrc/ModelGen/target/ModelGen.jar" /iomanager "/hg/management/misc/iomgr_payload_model"'
+# == build ==
+alias bm='./build.py' # build management
+alias bs='scons -k -u FUSION_VERSION_STRING=0.0.0 FUSION_BUILD_VERSION=0' # -k is keep going if experiencing errors.
+alias bs12='bs -j12'
+alias bs8='bs -j8'
+alias bs6='bs -j6'
+alias bs4='bs -j4'
+alias glr="st | grep master.xml | sed 's/[^/]*.master.xml/.gen_lastrun/g' | sed 's/[\?!MRA] //g' | xargs touch" # web "gen last run" file create
+alias grl="st | grep master.xml | sed 's/[\?!MRA] //g' | xargs touch" # web Gen, Run the Last modified masters
+alias dgrl="find . -name .gen_lastrun | xargs rm"
+alias qgrl="qr -X re:.*master.xml; grl" # web Gen, Run the Last modified masters in the current patch
+alias css='cp jsrc/IoManager/resources/*.css output/resources/html/' # copy css resources to output
+alias img='cp --recursive ./jsrc/IoManager/resources/images output/resources/html' # copy image resources to output
+# == run ==
+msrvreq() # sets up all the directories that you need, kthx
+{
+echo This command destroys the /var/lib/fio directory. Really proceed? \(y/n\)
+
+read choice
+if [ $choice = "y" ] || [ $choice = "Y" ]; then
+    echo treating $PWD as management repository
+    management=$PWD
+else
+    return 0
+fi
+
+# PREREQUISITES:
+sudo rm -r /usr/share/doc/fio-msrv
+sudo mkdir /usr/share/doc/fio-msrv
+sudo chown jfaust:jfaust /usr/share/doc/fio-msrv
+sudo rm -r /var/lib/fio
+sudo mkdir /var/lib/fio
+sudo chown jfaust:jfaust /var/lib/fio
+sudo rm -r /etc/fio
+sudo mkdir /etc/fio
+sudo chown jfaust:jfaust /etc/fio
+sudo rm -r /usr/share/fio
+sudo mkdir /usr/share/fio
+sudo chown jfaust:jfaust /usr/share/fio
+sudo rm -r /var/log/fusionio
+sudo mkdir /var/log/fusionio
+sudo chown jfaust:jfaust /var/log/fusionio
+
+cp -r src/util/fio-msrv/resources/* /var/lib/fio
+mv /var/lib/fio/template.cfg_version /var/lib/fio/.cfg_version
+mv /var/lib/fio/template.idp_version /var/lib/fio/.idp_version
+
+cp -r src/util/fio-agent/resources/* /var/lib/fio
+mv /var/lib/fio/fio-agent-cfg.template.xml /var/lib/fio/fio-agent-cfg.xml
+mv /var/lib/fio/fio-agent-cfg.xml /etc/fio
+mkdir /var/lib/fio/agent_keys/disabled
+mv /var/lib/fio/agent_keys/fms* /var/lib/fio/agent_keys/disabled
+
+cp -r /var/lib/fio/logcfg /usr/share/fio
+rm -r /var/lib/fio/logcfg
+
+pushd /usr/share/fio
+ln -s $management/output/resources/html html
+popd
+
+echo
+echo done
+echo
+echo /var/lib/fio
+ls -Al /var/lib/fio
+echo /etc/fio
+ls -Al /etc/fio
+echo /usr/share/fio
+ls -Al /usr/share/fio
+echo /var/log/fusionio
+ls -Al /var/log/fusionio
+echo /usr/share/doc/fio-msrv
+ls -Al /usr/share/doc/fio-msrv
+}
+
+alias killsims='pkill -f manage.py; pkill -f fio-agent'
+alias showsims='ps -fp $(pgrep -d, -f manage.py); ps -fp $(pgrep -d, -f fio-agent)'
+alias simsuper='python `find . -name manage.py` createsuperuser'
+sim()
+{
+  sim_number=$1
+  port=9052
+  site=1
+  if [ $# -eq 0 ]; then
+      echo "Starting simulator on default port ($port) with default site ($site)"
+      python manage.py runserver 0.0.0.0:$port
+  else
+      port=`expr $port + $sim_number`
+      site=`expr $site + $sim_number`
+      echo "Starting simulator on port ($port) with settings_site($site)"
+      python manage.py runserver 0.0.0.0:$port --settings=settings_site$site
+  fi
+}
+alias resim="./reset_db.py;./populate_db.py;sim"
+alias simput="curl -H \"Content-Type: application/json\" -X PUT -d" # put simulator json, ex: '{\"current_errors\":2}' localhost:9052/vsl_saft/node/xxx
+agent()
+{
+  if [ $# -eq 0 ]; then
+    echo "agent -f"
+    ./linux2-x86_64/output/bin/fio-agent -f
+  else
+    # s has an optional argument, t has an optional argument
+    TEMP=`getopt --options s::t:: --long sim-number::,config-dir:: --name 'bash_aliases.sh' -- "$@"`
+    if [ $? != 0 ]; then echo "bash_aliases.sh: Your args are all messed up... TERMINATED." >&2; return 1; fi
+    eval set -- "${TEMP}"
+    unset TEMP
+
+    port=9052 # default port
+    config=/var/lib/fio
+
+    while true ; do
+      case "$1" in
+        -s|--sim-number)
+          case "$2" in
+              "") echo "using default port (${port})"; shift 2 ;;
+              *)  sim_number=$2; port=`expr ${port} + $2`; shift 2 ;;
+          esac
+          simulation=" -slocalhost:${port}" ; ;;
+        -t|--config-dir)
+          case "$2" in
+              "") echo "using default config (${config})"; shift 2 ;;
+              *)  config=${config}-$2; shift 2 ;;
+          esac
+          configuration_dir=" -t${config}"
+          if [ ! -d "${config}" ]; then
+              echo "Making directory: \`${config}'";
+              sudo mkdir ${config};
+              sudo chown jfaust:jfaust ${config};
+          fi ;;
+        --) shift ; break ;;
+        *) echo "bash_aliases.sh: Forgot to handle a case here... TERMINATED." ; return 1 ;;
+      esac
+    done
+
+    if [ "${sim_number}" != "" -a "${configuration_dir}" = "" ];
+      then # the sim number was set, but the config directory was not. interpret this as a non-default config dir.
+        configuration_dir=" -t${config}-sim${sim_number}"; fi
+
+    args=
+    for arg do args="$args -$arg" ; done #these arguments were not parsed by the case "$1" statement.
+
+    echo "Executing: ./linux2-x86_64/output/bin/fio-agent -f${configuration_dir}${simulation}${args}"
+    ./linux2-x86_64/output/bin/fio-agent -f${configuration_dir}${simulation}${args}
+    unset configuration_dir # stop pollution now!
+    unset sim_number        # stop pollution now!
+    unset simulation        # stop pollution now!
+    unset args
+  fi
+}
+alias msrv="sudo ./linux2-x86_64/output/bin/fio-msrv -f" # fio-msrv -f
+alias alertrules="echo copied to clipboard; ./linux2-x86_64/output/bin/fio-msrv --dump-alert-rules confluence-page | xsel -b"
+dat() # remove files from var lib fio data
+{
+  sudo ls /var/lib/fio/data/$1
+  sudo rm /var/lib/fio/data/$1
+}
+datm() # remove only managed object files from var lib fio data
+{
+  ls /var/lib/fio/data/m*.dat
+  ls /var/lib/fio/data/m*.backup
+  sudo rm /var/lib/fio/data/m*.dat
+  sudo rm /var/lib/fio/data/m*.backup
+}
+datall() # remove all dat and backup files!
+{
+  ls /var/lib/fio/data/*.dat
+  ls /var/lib/fio/data/*.backup
+  sudo rm /var/lib/fio/data/*.dat
+  sudo rm /var/lib/fio/data/*.backup
+}
+dlk()
+{
+  curl -k -H "accept: application/octet-stream" -u "admin:asdfasdf" -X GET https://$1:9051/admin/agentkey/$1.int.fusionio.com.key
+}
+
+# hg ---
+alias thg='/usr/bin/thg > /dev/null 2>&1 &' # tortoise hg quiet!
+alias vdi='/usr/bin/thg vdiff > /dev/null 2>&1 &' # tortoise hg quiet!
+alias srv='hg serve'
+alias stp='hg strip'
+alias stt='hg strip tip'
+alias smoke='hg smoke'
+alias pushit='io;hg push;io'
+alias rev='hg revert'
+alias in='hg in -G'
+alias out='hg out -G'
+alias io='in;out'
+alias pur='hg pur'
+alias prg='pur'
+alias st='hg st'
+alias di='hg diff'
+alias ar='hg addremove'
+alias lvc='tmpl 1 "{desc}" | head -n1 | xsel -b'
+reb() # rebase from (source) to (destination)
+{
+  if [ $# -eq 0 -o $# -eq 1 ]
+    then
+      echo "Not enough arguments supplied; 2 are required (source destination)."
+  else
+    hg rebase -s$1 -d$2
+  fi
+}
+re() # pull (repo) and update (branch)
+{
+  hg pull $1
+  hg update $2
+}
+tmpl() # hg log template, limited by count
+{
+  if [ $# -eq 1 ]; then
+    echo "Not enought arguments supplied (limit template)."
+    return 1
+  fi
+#  limit=$1; shift
+#  template="\"\{$1\}"; shift
+#  while [ "$1" != "" ]; do
+#    template="$template \{$1\}"
+#    shift
+#  done
+#  template="$template\""
+#  echo hg log -l$limit --template $template
+  hg log -l"$1" --template "$2"
+}
+lv() # log verbosely (count=1) changesets
+{
+  arg=$1
+  if [ $# -eq 0 ]
+    then
+      echo "No arguments supplied; 1 required (count=1). Defaulting."
+      arg=1
+  fi
+  hg log -G -v -l $arg
+}
+loj() # log verbosely (grep) (count=1) changesets
+{
+  grep=$1
+  count=$2
+  if [ $# -eq 0 ]
+    then
+      echo "No arguments supplied; 1 required 1 optional (grep, count=100). Exiting."
+  else
+    if [ $# -eq 1 ]
+      then
+        echo "One argument supplied; 1 optional (count=100). Defaulting."
+        count=100
+    fi
+    hg log -G -v -l $count | egrep $grep
+  fi
+}
+log() # log (count=3) changesets
+{
+  arg=$1
+  if [ $# -eq 0 ]
+    then
+      echo "No arguments supplied; 1 required (count=3). Defaulting."
+      arg=3
+  fi
+  shift
+  hg log -G -l $arg $*
+}
+rpat() # log verbosely and open urls to reviewboard based on whats in the commit message
+{
+  arg=$1
+  if [ $# -eq 0 ]
+    then
+      echo "No arguments supplied; 1 required (count=1). Defaulting."
+      arg=1
+  fi
+  lv $arg | grep https://reviews.int.fusionio.com/r/ | sed 's/.*\(http\)/\1\/diff\/raw/g' >> /tmp/rpats
+  qa
+  if [ $? != 0 ]; then echo "error, applied patches"; return 1; fi
+  for line in `cat /tmp/rpats`;
+  do
+    echo $line
+    wget $line
+    mv raw .hg/patches/
+    hg qimport -e raw
+    hg qpush
+  done
+}
+lvr() # log verbosely and open urls to reviewboard based on whats in the commit message
+{
+  arg=$1
+  if [ $# -eq 0 ]
+    then
+      echo "No arguments supplied; 1 required (count=1). Defaulting."
+      arg=1
+  fi
+  lv $arg | grep https://reviews.int.fusionio.com/r/ | sed 's/.*\(http\)/\1/g' | xargs firefox &
+}
+lvj() # log verbosely and open urls to JIRA based on whats in the commit message
+{
+  arg=$1
+  if [ $# -eq 0 ]
+    then
+      echo "No arguments supplied; 1 required (count=1). Defaulting."
+      arg=1
+  fi
+   unset array element
+   IFS=',' read -a array <<< "`tmpl $arg '{desc}' | head -n1 | sed 's/\(.*\):.*/\1/'`"
+   for element in "${array[@]}"
+    do
+      firefox jira/browse/$element
+    done
+}
+fch() # files changed in <count> changesets matching <grep>
+{
+  if [ $# -eq 0 -o $# -eq 1 ]
+    then
+      echo "Not enough arguments supplied; 2 are required (count grep)."
+  else
+    tmpl $1 "{rev}:{tags}:\n{files}\n" | sed 's/ /\n/g' | egrep $2
+  fi
+}
+blam() # use hg blame on the (find-file) argument passed in
+{
+  if [ $# -eq 0 ]
+    then
+      echo "Not enough arguments supplied; 1 required (find-file)."
+  else
+    find . -name $1 -type f | xargs hg blame -nuc
+  fi
+}
+# == gking ==
+alias unb='hg unb' # unbundle
+alias gkdo='unb ~/in/gk/*.hg' # do a gk bundle
+alias gkls='ls ~/in/gk/*.hg' # list the gk bundles
+alias gkcl='rm ~/in/gk/*.hg; mv ~/in/*.hg ~/in/gk' # clean the gk bundle directory
+alias gkc='gkcl;re' # clean the gk bundle directory
+alias gki='pushd /hg/gkers;hg pull -u -q;./gkers.py -ujfaust;hg ci -m "jfaust gk";hg push -q;popd' # increment my gk count
+alias gkdoki='gkdo;gki'
+alias gkj='gkdo;gki'
+alias gker='pushd /hg/gkers;hg pull -u -q;./gkers.py;rev -a -q;popd' # tell who is gk
+alias gkp='pushd /hg/gkers;hg pull -u -q;./gkers.py -p;rev -a -q;popd' # print all gk counts
+gkset() # set the current gker to be (someone)
+{
+  if [ $# -eq 0 ]
+    then
+      echo "Not enough arguments supplied; 1 required (someone)."
+  else
+    pushd /hg/gkers
+    hg pull -u
+    ./gkers.py -s$1
+    hg ci -m "changed gker to $1"
+    pushit
+    popd
+  fi
+}
+me() # auto-MErges (source) to (destination)
+{
+  if [ $# -eq 0 -o $# -eq 1 ]
+    then
+      echo "Not enough arguments supplied; 2 are required (source destination)."
+  else
+    hg up $2
+    hg me $1
+    hg ci -m "merged $1 to $2"
+  fi
+}
+meed() # MErges (source) to (destination) and allows EDits
+{
+  if [ $# -eq 0 -o $# -eq 1 ]
+    then
+      echo "Not enough arguments supplied; 2 are required (source destination)."
+  else
+    hg up $2
+    hg me $1
+  fi
+}
+meno() # MErges (source) to (destination) but does it NO-op
+{
+  if [ $# -eq 0 -o $# -eq 1 ]
+    then
+      echo "Not enough arguments supplied; 2 are required (source destination)."
+  else
+    hg up $2
+    hg me $1
+    hg rev -r$2 -a
+    hg ci -m "no-op merged $1 to $2"
+  fi
+}
+# == phase ==
+alias phaseoff='hg phase --force --draft '\''public() and outgoing()'\'''
+alias pha='phaseoff'
+# == queue ==
+alias qr='hg qref'
+alias qre='hg qref -e'
+alias qrx='hg qref -X'
+alias qri='hg qref -I'
+alias qrl="gx ; hg qref -X listfile:tmp.gx.txt ; rm tmp.gx.txt" # exclude generated files from queue patch
+alias qrm='hg qref -m"`tmpl 1 "{desc}"`' # qref modify commit message, usually to insert a review
+alias qn='hg qnew'
+alias qren='hg qrename'
+alias qd='hg qdelete'
+alias qi='hg qimport'
+alias qt='hg qimport -rtip'
+alias qdi='hg qdiff'
+alias qst='hg qdiff --stat'
+alias qs='hg qser -s'
+alias q='hg qser'
+alias qa='hg qap'
+alias qpo='hg qpop'
+alias qpfo='hg qpop; echo folding...; qfo'
+alias qpa='hg qpop -a'
+alias qpu='hg qpush'
+alias qf='hg qfinish -a'
+alias qfo='hg qfold'
+qls()
+{
+  qst | sed 's/ //;s/\([^ ]*\).*/\1/g' | xargs -I {} ls $1 {}
+}
+# == queue rejects ==
+alias irej='st | sed "s/\? //g" | xargs cat' # cat reject files
+# == postreview ==
+alias po='hg postreview -i7'
+alias pog='grep '\''review request published'\'' | sed '\''s/.*\(http.*\)/Review: \1/'\'' | xsel -b'
+alias pco='hg po -i7 -Gmanagement-core-reviewers -p' # post review to management repository
+alias pui='hg po -i7 -Gmanagement-gui-reviewers -p' # post review to management repository
+alias pux='hg po -i7 -Gmanagement-ux-reviewers -p' # post review to management repository
+alias pjx='hg po -i111 -Gmanagement-jmx-reviewers -p' # post review to management repository
+alias poe='hg po -mqparent -e' # post existing
+poa() # POst Automatic review; get the changeset number from the review in the tip commit message
+{
+  poe `lv 1 | grep https://reviews.int.fusionio.com/r/ | sed 's/[^0-9]//g'`
+}
+# smoking ---
+ss1() # Smoke Status 1 of the (build_number)
+{
+  if [ $# -eq 0 ]
+    then
+      echo "Not enough arguments supplied; 1 required (build_number)."
+  else
+    echo http://jenkins.int.fusionio.com:8080/view/All/job/dev-smoke-mg-01/$1/SuperPu-Build-Servers=windows/consoleText
+    echo http://jenkins.int.fusionio.com:8080/view/All/job/dev-smoke-mg-01/$1/SuperPu-Build-Servers=debian6maven/consoleText
+    curl -s http://jenkins.int.fusionio.com:8080/view/All/job/dev-smoke-mg-01/$1/SuperPu-Build-Servers=windows/consoleText  | grep -i build.succ
+    curl -s http://jenkins.int.fusionio.com:8080/view/All/job/dev-smoke-mg-01/$1/SuperPu-Build-Servers=debian6maven/consoleText  | grep -i build.succ
+  fi
+}
+ss2() # Smoke Status 2 of the (build_number)
+{
+  if [ $# -eq 0 ]
+    then
+      echo "Not enough arguments supplied; 1 required (build_number)."
+  else
+    echo http://jenkins.int.fusionio.com:8080/view/All/job/dev-smoke-mg-02/$1/SuperPu-Build-Servers=windows/consoleText
+    echo http://jenkins.int.fusionio.com:8080/view/All/job/dev-smoke-mg-02/$1/SuperPu-Build-Servers=debian6maven/consoleText
+    curl -s http://jenkins.int.fusionio.com:8080/view/All/job/dev-smoke-mg-02/$1/SuperPu-Build-Servers=windows/consoleText | grep -i build.succ
+    curl -s http://jenkins.int.fusionio.com:8080/view/All/job/dev-smoke-mg-02/$1/SuperPu-Build-Servers=debian6maven/consoleText | grep -i build.succ
+  fi
+}
+

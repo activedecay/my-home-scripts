@@ -1,0 +1,31 @@
+#!/usr/bin/python
+
+from subprocess import Popen
+import os
+import sys
+
+__author__ = 'jfaust'
+app_name = None
+
+def log(msg):
+    print app_name + ': ' + msg
+
+def setup(args):
+    global app_name
+    app_name = args[0]
+
+def main(cmd_args):
+    setup(cmd_args)
+    current_dir = os.getcwd()
+    jarfile = current_dir + "/jsrc/WebScreenGen/target/WebScreenGen-1.0.0-SNAPSHOT-jar-with-dependencies.jar"
+    master_dir = "jsrc/IoManager/src/com/fusionio/fwm"
+    template_file = "generate_views.vsl"
+    templates_dir = "jsrc/WebScreenGen/templates"
+    args = "java -jar " + jarfile + " "+templates_dir+" "+template_file+" " + master_dir+" " + " ".join(cmd_args[1:])
+    log("Popen - " + args)
+    process = Popen(args=args, cwd=current_dir, shell=True)
+    process.wait()
+    log("done")
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv))

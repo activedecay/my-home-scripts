@@ -1,0 +1,63 @@
+#!/usr/bin/python
+
+import os
+import os.path
+import sys
+
+include_dir_extensions = ['.h','.hpp']
+
+exclude_dirs = ['.hg','.svn','linux2-x86_64','.idea','.settings','build']
+exclude_exts = ['.pyc','.o','.os','.orig','.obj','.ncb','.suo','.pdb','.exe']
+
+def main(argv=None):
+    if argv is None:
+        argv = sys.argv
+
+    if not argv:
+        sys.stderr.write("You must supply the name of the project\n")
+        return 1
+
+    projname = argv[1]
+
+    # only create <proj>.creator if it doesn't already exist
+    if not os.path.isfile('%s.creator'%(projname)):
+        with open('%s.creator'%(projname),'w') as f:
+            f.write("[General]\n")
+    # only create <proj>.config if it doesn't already exist
+    if not os.path.isfile('%s.config'%(projname)):
+        with open('%s.config'%(projname),'w') as f:
+            f.write("// ADD PREDEFINED MACROS HERE!\n")
+
+    # create the list of files & includes
+    with open('%s.files'%(projname),'w') as projfiles:
+        with open('%s.includes'%(projname),'w') as projincdirs:
+            for (path,dirs,files) in os.walk('.',followlinks=True):
+
+                # dir exclusion can be done in-place
+                for d in exclude_dirs:
+                    try:
+                        dirs.remove(d)
+                    except ValueError:
+                        pass
+
+                # if we're in management_libs, only traverse into 'current'
+                if path.endswith('management_libs'):
+                    dirs[:] = [d for d in dirs if d == 'current']
+
+                incdir = False
+                for f in files:
+                    (fbase,ext) = os.path.splitext(f)
+
+                    if ext in exclude_exts:
+                        continue
+
+                    if ext in include_dir_extensions:
+                        incdir = True
+                    projfiles.write(os.path.join(path,f) + "\n")
+
+                if incdir:
+                    projincdirs.write(os.path.join(path) + "\n")
+
+
+if __name__ == "__main__":
+    sys.exit(main())

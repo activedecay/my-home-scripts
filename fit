@@ -1,0 +1,3 @@
+mvn dependency:build-classpath -Dmdep.outputFile=cp -DexcludeGroupIds=com.fusionio.mgmt.service
+set $(fn cp | xargs sed -e "s/:/\n/g" |sort|uniq); echo $*|sed 's/ /:/g'
+

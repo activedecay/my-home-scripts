@@ -1,0 +1,11 @@
+#! /usr/bin/env bash
+filepath=$2
+hostname_path=$1
+#hostpath=$(echo $hostname_path | tr ":" " ")
+hp=(${hostname_path//:/ })
+hostname=${hp[0]}
+#echo $hostname
+remote_path=${hp[1]}
+echo $remote_path
+password=$(obtain_ion_password -H $hostname)
+sshpass -p "$password" scp -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no -r fusionservice@$hostname:$remote_path $filepath

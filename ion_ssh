@@ -1,0 +1,5 @@
+#! /usr/bin/env bash
+hostname=$1
+shift
+password=$(obtain_ion_password -H $hostname)
+sshpass -p "$password" ssh fusionservice@$hostname -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no "$*"

@@ -1,0 +1,79 @@
+#!/usr/bin/python
+
+from subprocess import Popen
+import os
+import subprocess
+import sys
+from xml.sax import ContentHandler
+from xml.parsers import expat
+
+output = ""
+
+def fixup_dir_ending_slash(attrs):
+    if attrs["dir"][-1] == "/":
+        attrs["dir"] = attrs["dir"][0:-1]
+
+def pipe_output(filename_string):
+    if filename_string[0:3] == "../": # these files are not in the repository anyway
+        return
+    global output
+    output += filename_string.replace("${object}","*") + "\n"
+
+
+def start_element(name, attrs):
+    global output
+    if name == "generate":
+        fixup_dir_ending_slash(attrs)
+        filename_string = attrs["dir"] + "/" + attrs["file"]
+        pipe_output(filename_string)
+    if name == "generate-per-object":
+        fixup_dir_ending_slash(attrs)
+        if 'prefix' in attrs:
+            filename_string = attrs["dir"] + "/" + attrs["prefix"] + "*" + attrs["postfix"]
+        else:
+            filename_string = attrs["dir"] + "/*" + attrs["postfix"]
+        pipe_output(filename_string)
+    #print 'Start element:', name, attrs
+def end_element(name):
+    pass
+    #print 'End element:', name
+def char_data(data):
+    pass
+    #print 'Character data:', repr(data)
+
+
+def main(cmd_args):
+    xml_parser = expat.ParserCreate()
+
+    xml_parser.StartElementHandler = start_element
+    xml_parser.EndElementHandler = end_element
+    xml_parser.CharacterDataHandler = char_data
+
+    path = os.path.abspath(os.getcwd() + "/misc/model/config.xml")
+
+    xml_parser.Parse("".join(file(path).readlines()), 1)
+
+    pipe_output('''**State.java
+**Event.java
+**Directive.java
+**Launcher.java
+**ViewBase.java
+**PresenterBase.java
+**.ui.xml
+**.idea''')
+
+    #args = os.path.abspath(os.getcwd() + "/misc/model/run.py") + " --print-hack-files"
+    #process = Popen(args=args, stdout=subprocess.PIPE, cwd=".", shell=True)
+    #process.wait()
+    #for line in process.stdout.readlines():
+    #    pipe_output(line.strip())
+
+    gx_txt = open(os.path.abspath(os.getcwd() + "/tmp.gx.txt"), 'w')
+
+    #print output
+    gx_txt.write(output)
+    gx_txt.close()
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv))
+

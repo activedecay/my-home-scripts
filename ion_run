@@ -1,0 +1,18 @@
+#! /usr/bin/env bash
+#*******************************************************************************
+#* Copyright (c) 2015 SanDisk Corp. and/or all its affiliates. All rights reserved.
+#*
+#*  No use, or distribution, of this source code is permitted in any form or
+#*  means without a valid, written license agreement with SanDisk Corp. Please
+#*  refer to the included "License" or "License.txt" file for terms and
+#*  conditions regarding the use and redistribution of this software.
+#******************************************************************************/
+ssh_args="-o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no"
+filepath="$3"
+program="$2"
+hostname="$1"
+if [ ! -n "$filepath" ]; then
+  program='bash -s'
+  filepath="$2"
+fi
+sshpass -p "$(obtain_ion_password -H ${hostname})" ssh fusionservice@${hostname} ${ssh_args} "$program" < ${filepath}

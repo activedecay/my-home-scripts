@@ -1,0 +1,2 @@
+java -classpath fio-jmx-srv/target/classes/:$(O=IFS; set $(find lib/*); IFS=':'; echo "$*"; IFS=$O) -jar fio-jmx-srv/target/fio-jmx-srv-1.0-SNAPSHOT.jar ioT --rest server fio-jmx-srv/src/main/resources/hello-world.yml $*
+
